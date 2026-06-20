@@ -14,6 +14,8 @@ export class Obj3D {
         this.sunX = -this.sunZ;
         this.inprodMin = 1e30;
         this.inprodMax = -1e30;
+        this.lightBright = 0;
+        this.lightShadow = 1;
         this.baseColorR = 200;
         this.baseColorG = 200;
         this.baseColorB = 200;
@@ -294,6 +296,7 @@ export class Obj3D {
         let inprod = a * this.sunX + b * this.sunY + c * this.sunZ;
         if (this.inprodRange === 0)
             return 255;
-        return Math.round(((inprod - this.inprodMin) / this.inprodRange) * 255);
+        let raw = ((inprod - this.inprodMin) / this.inprodRange) * 255;
+        return (raw + this.lightBright) * this.lightShadow;
     }
 }

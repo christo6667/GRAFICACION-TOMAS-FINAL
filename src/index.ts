@@ -292,4 +292,46 @@ window.addEventListener('load', () => {
       if (btn) btn.innerHTML = '■ DETENER';
       rotateLoop();
     }
+    
+    // Color Palette Listeners
+    document.getElementById('color-pink')?.addEventListener('click', () => {
+      if (baseObj) { baseObj.baseColorR = 255; baseObj.baseColorG = 0; baseObj.baseColorB = 255; }
+      repaintAll();
+    });
+    document.getElementById('color-blue')?.addEventListener('click', () => {
+      if (baseObj) { baseObj.baseColorR = 0; baseObj.baseColorG = 255; baseObj.baseColorB = 255; }
+      repaintAll();
+    });
+    document.getElementById('color-green')?.addEventListener('click', () => {
+      if (baseObj) { baseObj.baseColorR = 57; baseObj.baseColorG = 255; baseObj.baseColorB = 20; }
+      repaintAll();
+    });
+    
+    // Lighting Sliders Listeners
+    const lightDirX = document.getElementById('light-dir-x') as HTMLInputElement;
+    const valLightDirX = document.getElementById('val-light-dir-x');
+    lightDirX?.addEventListener('input', (e) => {
+      let val = parseFloat((e.target as HTMLInputElement).value);
+      if (valLightDirX) valLightDirX.innerText = val.toFixed(1);
+      if (baseObj) baseObj.sunX = val;
+      repaintAll();
+    });
+    
+    const lightBright = document.getElementById('light-bright') as HTMLInputElement;
+    const valLightBright = document.getElementById('val-light-bright');
+    lightBright?.addEventListener('input', (e) => {
+      let val = parseFloat((e.target as HTMLInputElement).value);
+      if (valLightBright) valLightBright.innerText = val.toFixed(1);
+      if (baseObj) baseObj.lightBright = val * 50; // amplify effect
+      repaintAll();
+    });
+    
+    const lightShadow = document.getElementById('light-shadow') as HTMLInputElement;
+    const valLightShadow = document.getElementById('val-light-shadow');
+    lightShadow?.addEventListener('input', (e) => {
+      let val = parseFloat((e.target as HTMLInputElement).value);
+      if (valLightShadow) valLightShadow.innerText = val.toFixed(1);
+      if (baseObj) baseObj.lightShadow = val;
+      repaintAll();
+    });
 });

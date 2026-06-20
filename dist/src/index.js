@@ -240,6 +240,7 @@ canvas.addEventListener('wheel', (e) => {
 });
 // Cargar pinza por defecto al iniciar
 window.addEventListener('load', () => {
+    var _a, _b, _c;
     cv = new CvZbuf(graphics, canvas);
     if (pinzaBaseData) {
         let tempObj = new Obj3D();
@@ -281,4 +282,60 @@ window.addEventListener('load', () => {
             btn.innerHTML = '■ DETENER';
         rotateLoop();
     }
+    // Color Palette Listeners
+    (_a = document.getElementById('color-pink')) === null || _a === void 0 ? void 0 : _a.addEventListener('click', () => {
+        if (baseObj) {
+            baseObj.baseColorR = 255;
+            baseObj.baseColorG = 0;
+            baseObj.baseColorB = 255;
+        }
+        repaintAll();
+    });
+    (_b = document.getElementById('color-blue')) === null || _b === void 0 ? void 0 : _b.addEventListener('click', () => {
+        if (baseObj) {
+            baseObj.baseColorR = 0;
+            baseObj.baseColorG = 255;
+            baseObj.baseColorB = 255;
+        }
+        repaintAll();
+    });
+    (_c = document.getElementById('color-green')) === null || _c === void 0 ? void 0 : _c.addEventListener('click', () => {
+        if (baseObj) {
+            baseObj.baseColorR = 57;
+            baseObj.baseColorG = 255;
+            baseObj.baseColorB = 20;
+        }
+        repaintAll();
+    });
+    // Lighting Sliders Listeners
+    const lightDirX = document.getElementById('light-dir-x');
+    const valLightDirX = document.getElementById('val-light-dir-x');
+    lightDirX === null || lightDirX === void 0 ? void 0 : lightDirX.addEventListener('input', (e) => {
+        let val = parseFloat(e.target.value);
+        if (valLightDirX)
+            valLightDirX.innerText = val.toFixed(1);
+        if (baseObj)
+            baseObj.sunX = val;
+        repaintAll();
+    });
+    const lightBright = document.getElementById('light-bright');
+    const valLightBright = document.getElementById('val-light-bright');
+    lightBright === null || lightBright === void 0 ? void 0 : lightBright.addEventListener('input', (e) => {
+        let val = parseFloat(e.target.value);
+        if (valLightBright)
+            valLightBright.innerText = val.toFixed(1);
+        if (baseObj)
+            baseObj.lightBright = val * 50; // amplify effect
+        repaintAll();
+    });
+    const lightShadow = document.getElementById('light-shadow');
+    const valLightShadow = document.getElementById('val-light-shadow');
+    lightShadow === null || lightShadow === void 0 ? void 0 : lightShadow.addEventListener('input', (e) => {
+        let val = parseFloat(e.target.value);
+        if (valLightShadow)
+            valLightShadow.innerText = val.toFixed(1);
+        if (baseObj)
+            baseObj.lightShadow = val;
+        repaintAll();
+    });
 });

@@ -1,4 +1,4 @@
-<!doctype html>
+html_content = """<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -313,3 +313,6 @@
   <script src="./dist/src/index.js" type="module"></script>
 </body>
 </html>
+"""
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html_content)

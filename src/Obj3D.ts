@@ -16,6 +16,8 @@ export class Obj3D{
    private imgCenter: Point2D;
    public sunZ: number = 1 / Math.sqrt(3); public sunY: number = this.sunZ; public sunX: number = -this.sunZ;
    inprodMin: number = 1e30; inprodMax: number = -1e30; inprodRange: number;
+   public lightBright: number = 0;
+   public lightShadow: number = 1;
    public baseColorR: number = 200; public baseColorG: number = 200; public baseColorB: number = 200;
    public w:any[] = new Array();         // World coordinates
    private e:Array<Point3D>;                     // Eye coordinates
@@ -284,7 +286,7 @@ export class Obj3D{
    colorCode(a: number, b: number, c: number): number{
       let inprod = a * this.sunX + b * this.sunY + c * this.sunZ;
       if (this.inprodRange === 0) return 255;
-      return Math.round(
-          ((inprod - this.inprodMin)/this.inprodRange) * 255);
+      let raw = ((inprod - this.inprodMin)/this.inprodRange) * 255;
+      return (raw + this.lightBright) * this.lightShadow;
    }
 }
