@@ -1,6 +1,7 @@
 import { Obj3D } from './Obj3D.js';
 import { CvZbuf } from './CvZbuf.js';
-import { pinzaBaseData, pinzaMovilData } from './defaultModels.js';
+import { Point3D } from './point3D.js';
+import { chainLink0, chainLink1, chainLink2, chainLink3, chainLink4 } from './defaultModels.js';
 
 let canvas: HTMLCanvasElement;
 let graphics: CanvasRenderingContext2D;
@@ -9,93 +10,36 @@ canvas = <HTMLCanvasElement>document.getElementById('circlechart');
 graphics = canvas.getContext('2d');
 
 let cv: CvZbuf;
-let obj: Obj3D;
+let loadedObjects: Obj3D[] = [];
+let backups: (Point3D | null)[][] = [];
 
-let baseObj: Obj3D | null = null;
-let movilObj: Obj3D | null = null;
+// Kinematics states
+let coilingProgress = 0;
+let coilingTarget = 0;
+let isCoiling = false;
+
+// Assembly state
+let visibleLinksCount = 5;
+let baseRho = 1.0;
 
 function repaintAll() {
   if (!cv) cv = new CvZbuf(graphics, canvas);
   cv = new CvZbuf(graphics, canvas);
   
-  if (baseObj) cv.addObj(baseObj);
-  if (movilObj) cv.addObj(movilObj);
-  
-  if (baseObj) obj = baseObj;
-  else if (movilObj) obj = movilObj;
-  
-  let totalVerts = 0;
-  let totalTris = 0;
-  
-  if (baseObj) {
-    totalVerts += baseObj.w.length - 1;
-    totalTris += baseObj.getPolyList().length;
+  for (let i = 0; i < visibleLinksCount && i < loadedObjects.length; i++) {
+    cv.addObj(loadedObjects[i]);
   }
-  if (movilObj) {
-    totalVerts += movilObj.w.length - 1;
-    totalTris += movilObj.getPolyList().length;
-  }
-  
-  const vEl = document.getElementById('stat-verts');
-  if (vEl) vEl.innerText = totalVerts.toString();
-  const tEl = document.getElementById('stat-tris');
-  if (tEl) tEl.innerText = totalTris.toString();
-  
   cv.paint();
 }
 
-function leerArchivoBase(e:any) {
-  var archivo = e.target.files[0];
-  if (!archivo) return;
-  document.getElementById('file-name-base').innerText = archivo.name;
-  var lector = new FileReader();
-  lector.onload = function(ev) {
-    var contenido = ev.target.result as string;
-    const rawEl = document.getElementById('raw-base') as HTMLTextAreaElement;
-    if (rawEl) rawEl.value = contenido;
-    
-    let tempObj = new Obj3D();
-    if (tempObj.read(contenido)) {
-      tempObj.baseColorR = 190; tempObj.baseColorG = 190; tempObj.baseColorB = 190;
-      baseObj = tempObj;
-      repaintAll();
-    }
-  };
-  lector.readAsText(archivo);
-}
-
-function leerArchivoMovil(e:any) {
-  var archivo = e.target.files[0];
-  if (!archivo) return;
-  document.getElementById('file-name-movil').innerText = archivo.name;
-  var lector = new FileReader();
-  lector.onload = function(ev) {
-    var contenido = ev.target.result as string;
-    const rawEl = document.getElementById('raw-movil') as HTMLTextAreaElement;
-    if (rawEl) rawEl.value = contenido;
-    
-    let tempObj = new Obj3D();
-    if (tempObj.read(contenido)) {
-      tempObj.baseColorR = 190; tempObj.baseColorG = 190; tempObj.baseColorB = 190;
-      tempObj.pivotX = 0; tempObj.pivotY = 0; tempObj.pivotZ = 0;
-      movilObj = tempObj;
-      repaintAll();
-    }
-  };
-  lector.readAsText(archivo);
-}
-
-function vp(dTheta:number, dPhi:number, fRho:number):void{
-  if (cv && cv.getObjs().length > 0) {
-    cv.getObjs().forEach(o => o.vp(cv, dTheta, dPhi, fRho));
+function vp(dTheta: number, dPhi: number, fRho: number) {
+  if (!cv || loadedObjects.length === 0) return;
+  for (let obj of loadedObjects) {
+    obj.vp(cv, dTheta, dPhi, fRho);
   }
 }
 
-// Eventos
-document.getElementById('file-input-base')?.addEventListener('change', leerArchivoBase, false);
-document.getElementById('file-input-movil')?.addEventListener('change', leerArchivoMovil, false);
-
-let autoRotating: boolean = true;
+let autoRotating = false;
 let animationFrameId: number;
 
 function toggleAutoRotate() {
@@ -107,51 +51,87 @@ function toggleAutoRotate() {
       btn.innerHTML = '■ DETENER';
       rotateLoop();
     } else {
-      btn.innerHTML = '▶ ANIMAR';
+      btn.innerHTML = '► ANIMAR';
       cancelAnimationFrame(animationFrameId);
     }
   }
 }
 
+function updateKinematics() {
+  if (coilingProgress !== coilingTarget) {
+     coilingProgress += (coilingTarget - coilingProgress) * 0.1;
+     if (Math.abs(coilingTarget - coilingProgress) < 0.01) {
+        coilingProgress = coilingTarget;
+     }
+     
+     let angle = coilingProgress * (Math.PI / 2.2); 
+
+     for (let i = 0; i < loadedObjects.length; i++) {
+        for (let v = 1; v < loadedObjects[i].w.length; v++) {
+           let pBase = backups[i][v];
+           if (!pBase) continue;
+           let px = pBase.x;
+           let py = pBase.y;
+           let pz = pBase.z;
+
+           for (let j = i - 1; j >= 0; j--) {
+              let jx = -2.24 + j * 1.35; 
+              let jy = 0;
+              
+              let tx = px - jx;
+              let ty = py - jy;
+              let rx = tx * Math.cos(angle) - ty * Math.sin(angle);
+              let ry = tx * Math.sin(angle) + ty * Math.cos(angle);
+              px = rx + jx;
+              py = ry + jy;
+           }
+           
+           loadedObjects[i].w[v].x = px;
+           loadedObjects[i].w[v].y = py;
+           loadedObjects[i].w[v].z = pz;
+        }
+     }
+     vp(0,0,1);
+  }
+}
+
 function rotateLoop() {
-  if (!autoRotating) return;
-  let dTheta = 45 * 0.0005;
-  vp(dTheta, 0, 1);
+  if (autoRotating) {
+    let dTheta = 45 * 0.0005;
+    vp(dTheta, 0, 1);
+  }
+  
+  updateKinematics();
   animationFrameId = requestAnimationFrame(rotateLoop);
 }
 
 document.getElementById('btn-auto-rotate')?.addEventListener('click', toggleAutoRotate, false);
 
+canvas.addEventListener('click', () => {
+    coilingTarget = coilingTarget === 0 ? 1 : 0;
+    if (!autoRotating) {
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        rotateLoop();
+    }
+});
+
 let Pix: number, Piy: number;
 let Pfx: number, Pfy: number;
 let flag: boolean = false;
 
-// Manipulación 360 (Ratón)
 function handleMouse(evento: any) {
   Pix = evento.offsetX;
   Piy = evento.offsetY;
   flag = true;
-  // Al hacer click, cerrar la pinza
-  if (cv && cv.getObjs().length > 1) {
-     let movil = cv.getObjs()[1];
-     movil.localRotZ = -(25 * Math.PI) / 180.0;
-     const apSlider = <HTMLInputElement>document.getElementById('input-apertura');
-     if (apSlider) {
-       apSlider.value = '25';
-       document.getElementById('val-apertura').innerText = '25°';
-     }
-     cv.paint();
-  }
 }
 
 function makeVizualization(evento: any) {
-  if (flag && obj) {
+  if (flag && loadedObjects.length > 0) {
     Pfx = evento.offsetX;
     Pfy = evento.offsetY;
     let difX = Pfx - Pix;
     let difY = Pfy - Piy;
     
-    // Mejor sensibilidad para 360 grados
     vp(-difX * 0.01, difY * 0.01, 1);
     
     Pix = Pfx;
@@ -161,17 +141,6 @@ function makeVizualization(evento: any) {
 
 function noDraw() {
   flag = false;
-  // Al soltar el click, abrir la pinza
-  if (cv && cv.getObjs().length > 1) {
-     let movil = cv.getObjs()[1];
-     movil.localRotZ = 0;
-     const apSlider = <HTMLInputElement>document.getElementById('input-apertura');
-     if (apSlider) {
-       apSlider.value = '0';
-       document.getElementById('val-apertura').innerText = '0°';
-     }
-     cv.paint();
-  }
 }
 
 canvas.addEventListener('mousedown', handleMouse);
@@ -179,34 +148,27 @@ canvas.addEventListener('mouseup', noDraw);
 canvas.addEventListener('mousemove', makeVizualization);
 canvas.addEventListener('mouseleave', noDraw);
 
-
-// Resize handling básico
 function resizeCanvas() {
   const container = document.getElementById('canvas-container');
   if (container) {
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
-    if (obj && cv) {
-      cv.paint();
-    }
+    if (cv) cv.paint();
   }
 }
 
 window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
 
-// D-Pad Rotation Handling
 let manualRotationInterval: number;
 
 function startManualRotation(dTheta: number, dPhi: number, fRho: number = 1) {
-  if (!obj) return;
-  // Rotate/zoom once immediately
+  if (loadedObjects.length === 0) return;
   vp(dTheta, dPhi, fRho);
-  // Then start interval for continuous action
   clearInterval(manualRotationInterval);
   manualRotationInterval = window.setInterval(() => {
     vp(dTheta, dPhi, fRho);
-  }, 30); // 30ms for smooth ~30fps
+  }, 30);
 }
 
 function stopManualRotation() {
@@ -218,120 +180,210 @@ function setupDPad() {
   const btnDown = document.getElementById('btn-rot-down');
   const btnLeft = document.getElementById('btn-rot-left');
   const btnRight = document.getElementById('btn-rot-right');
-  const btnZoomIn = document.getElementById('btn-zoom-in');
-  const btnZoomOut = document.getElementById('btn-zoom-out');
 
   const addHoldEvents = (btn: HTMLElement, dTheta: number, dPhi: number, fRho: number = 1) => {
     if (!btn) return;
     btn.addEventListener('mousedown', () => startManualRotation(dTheta, dPhi, fRho));
     btn.addEventListener('mouseup', stopManualRotation);
     btn.addEventListener('mouseleave', stopManualRotation);
-    
-    // Touch support for mobile
     btn.addEventListener('touchstart', (e) => { e.preventDefault(); startManualRotation(dTheta, dPhi, fRho); });
     btn.addEventListener('touchend', (e) => { e.preventDefault(); stopManualRotation(); });
     btn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopManualRotation(); });
   };
 
-  const rotSpeed = 0.05; // Base rotation speed for D-pad
+  const rotSpeed = 0.05;
   addHoldEvents(btnUp, 0, rotSpeed);
   addHoldEvents(btnDown, 0, -rotSpeed);
   addHoldEvents(btnLeft, -rotSpeed, 0);
   addHoldEvents(btnRight, rotSpeed, 0);
-  
-  // Zoom functionality for buttons (continuous)
-  addHoldEvents(btnZoomIn, 0, 0, 0.95);
-  addHoldEvents(btnZoomOut, 0, 0, 1.05);
 }
 setupDPad();
 
-// Mouse wheel zoom
 canvas.addEventListener('wheel', (e) => {
-  e.preventDefault(); // Stop page from scrolling
-  if (!obj) return;
+  e.preventDefault();
+  if (loadedObjects.length === 0) return;
   if (e.deltaY < 0) {
-    vp(0, 0, 0.9); // Zoom in
+    vp(0, 0, 0.9);
   } else {
-    vp(0, 0, 1.1); // Zoom out
+    vp(0, 0, 1.1);
   }
 });
 
-// Cargar pinza por defecto al iniciar
 window.addEventListener('load', () => {
   cv = new CvZbuf(graphics, canvas);
   
-  if (pinzaBaseData) {
-    let tempObj = new Obj3D();
-    if (tempObj.read(pinzaBaseData)) {
-        tempObj.baseColorR = 190; tempObj.baseColorG = 190; tempObj.baseColorB = 190;
-        baseObj = tempObj;
-        const rawEl = document.getElementById('raw-base') as HTMLTextAreaElement;
-        if (rawEl) rawEl.value = pinzaBaseData;
-        const nameEl = document.getElementById('file-name-base');
-        if (nameEl) nameEl.innerText = 'balon.txt';
-      }
-    }
-    
-    if (pinzaMovilData) {
+  const parts = [chainLink0, chainLink1, chainLink2, chainLink3, chainLink4];
+  const colors = [
+    {r: 255, g: 0, b: 0},
+    {r: 0, g: 255, b: 0},
+    {r: 0, g: 150, b: 255},
+    {r: 255, g: 255, b: 0},
+    {r: 255, g: 0, b: 255}
+  ];
+
+  let minX = 9999, maxX = -9999;
+  let minY = 9999, maxY = -9999;
+  let minZ = 9999, maxZ = -9999;
+
+  parts.forEach((data, i) => {
+    if (data) {
       let tempObj = new Obj3D();
-      if (tempObj.read(pinzaMovilData)) {
-        tempObj.baseColorR = 190; tempObj.baseColorG = 190; tempObj.baseColorB = 190;
-        tempObj.pivotX = 0; tempObj.pivotY = 0; tempObj.pivotZ = 0;
-        movilObj = tempObj;
-        const rawEl = document.getElementById('raw-movil') as HTMLTextAreaElement;
-        if (rawEl) rawEl.value = pinzaMovilData;
-        const nameEl = document.getElementById('file-name-movil');
-        if (nameEl) nameEl.innerText = '< VACÍO >';
+      if (tempObj.read(data)) {
+        tempObj.baseColorR = colors[i].r;
+        tempObj.baseColorG = colors[i].g;
+        tempObj.baseColorB = colors[i].b;
+        loadedObjects.push(tempObj);
+
+        if (tempObj.xMin < minX) minX = tempObj.xMin;
+        if (tempObj.xMax > maxX) maxX = tempObj.xMax;
+        if (tempObj.yMin < minY) minY = tempObj.yMin;
+        if (tempObj.yMax > maxY) maxY = tempObj.yMax;
+        if (tempObj.zMin < minZ) minZ = tempObj.zMin;
+        if (tempObj.zMax > maxZ) maxZ = tempObj.zMax;
       }
     }
-    
+  });
+
+  let dx = (maxX + minX) / 2.0;
+  let dy = (maxY + minY) / 2.0;
+  let dz = (maxZ + minZ) / 2.0;
+  
+  let sx = maxX - minX; let sy = maxY - minY; let sz = maxZ - minZ;
+  baseRho = 0.6 * Math.sqrt(sx*sx + sy*sy + sz*sz);
+
+  for (let i=0; i<loadedObjects.length; i++) {
+     let obj = loadedObjects[i];
+     backups[i] = [];
+     for (let v=1; v<obj.w.length; v++) {
+        if (obj.w[v]) {
+            obj.w[v].x -= dx;
+            obj.w[v].y -= dy;
+            obj.w[v].z -= dz;
+            backups[i][v] = new Point3D(obj.w[v].x, obj.w[v].y, obj.w[v].z);
+        }
+     }
+     
+     obj.rhoMin = baseRho;
+     obj.rhoMax = 1000 * obj.rhoMin;
+     obj.rho = 3.5 * obj.rhoMin; 
+  }
+  
+  vp(0,0,1);
+  repaintAll();
+  rotateLoop();
+  
+  // Panel Listeners
+  const lightDirX = document.getElementById('light-dir-x') as HTMLInputElement;
+  const valLightDirX = document.getElementById('val-light-dir-x');
+  lightDirX?.addEventListener('input', (e) => {
+    let val = parseFloat((e.target as HTMLInputElement).value);
+    if (valLightDirX) valLightDirX.innerText = val.toFixed(1);
+    for(let obj of loadedObjects) { obj.sunX = val; }
     repaintAll();
-    
-    if (autoRotating) {
-      const btn = document.getElementById('btn-auto-rotate');
-      if (btn) btn.innerHTML = '■ DETENER';
-      rotateLoop();
-    }
-    
-    // Color Palette Listeners
-    document.getElementById('color-pink')?.addEventListener('click', () => {
-      if (baseObj) { baseObj.baseColorR = 255; baseObj.baseColorG = 0; baseObj.baseColorB = 255; }
+  });
+  
+  const lightBright = document.getElementById('light-bright') as HTMLInputElement;
+  const valLightBright = document.getElementById('val-light-bright');
+  lightBright?.addEventListener('input', (e) => {
+    let val = parseFloat((e.target as HTMLInputElement).value);
+    if (valLightBright) valLightBright.innerText = val.toFixed(1);
+    for(let obj of loadedObjects) { obj.lightBright = val * 50; }
+    repaintAll();
+  });
+  
+  const lightShadow = document.getElementById('light-shadow') as HTMLInputElement;
+  const valLightShadow = document.getElementById('val-light-shadow');
+  lightShadow?.addEventListener('input', (e) => {
+    let val = parseFloat((e.target as HTMLInputElement).value);
+    if (valLightShadow) valLightShadow.innerText = val.toFixed(1);
+    for(let obj of loadedObjects) { obj.lightShadow = val; }
+    repaintAll();
+  });
+
+  // Zoom Listener
+  const camZoom = document.getElementById('cam-zoom') as HTMLInputElement;
+  const valCamZoom = document.getElementById('val-cam-zoom');
+  camZoom?.addEventListener('input', (e) => {
+    let val = parseFloat((e.target as HTMLInputElement).value);
+    if (valCamZoom) valCamZoom.innerText = val.toFixed(1);
+    for(let obj of loadedObjects) { obj.rho = val * baseRho; }
+    vp(0,0,1);
+    repaintAll();
+  });
+
+  // Assemble Button Listener
+  const btnAssemble = document.getElementById('btn-assemble');
+  btnAssemble?.addEventListener('click', () => {
+      visibleLinksCount = 1;
       repaintAll();
-    });
-    document.getElementById('color-blue')?.addEventListener('click', () => {
-      if (baseObj) { baseObj.baseColorR = 0; baseObj.baseColorG = 255; baseObj.baseColorB = 255; }
-      repaintAll();
-    });
-    document.getElementById('color-green')?.addEventListener('click', () => {
-      if (baseObj) { baseObj.baseColorR = 57; baseObj.baseColorG = 255; baseObj.baseColorB = 20; }
-      repaintAll();
-    });
-    
-    // Lighting Sliders Listeners
-    const lightDirX = document.getElementById('light-dir-x') as HTMLInputElement;
-    const valLightDirX = document.getElementById('val-light-dir-x');
-    lightDirX?.addEventListener('input', (e) => {
-      let val = parseFloat((e.target as HTMLInputElement).value);
-      if (valLightDirX) valLightDirX.innerText = val.toFixed(1);
-      if (baseObj) baseObj.sunX = val;
-      repaintAll();
-    });
-    
-    const lightBright = document.getElementById('light-bright') as HTMLInputElement;
-    const valLightBright = document.getElementById('val-light-bright');
-    lightBright?.addEventListener('input', (e) => {
-      let val = parseFloat((e.target as HTMLInputElement).value);
-      if (valLightBright) valLightBright.innerText = val.toFixed(1);
-      if (baseObj) baseObj.lightBright = val * 50; // amplify effect
-      repaintAll();
-    });
-    
-    const lightShadow = document.getElementById('light-shadow') as HTMLInputElement;
-    const valLightShadow = document.getElementById('val-light-shadow');
-    lightShadow?.addEventListener('input', (e) => {
-      let val = parseFloat((e.target as HTMLInputElement).value);
-      if (valLightShadow) valLightShadow.innerText = val.toFixed(1);
-      if (baseObj) baseObj.lightShadow = val;
-      repaintAll();
-    });
+      let assemblyInterval = setInterval(() => {
+          visibleLinksCount++;
+          repaintAll();
+          if (visibleLinksCount >= 5) {
+              clearInterval(assemblyInterval);
+          }
+      }, 600); // add a new link every 600ms
+  });
+
+
+  // File loaders
+  function leerArchivoGenerico(e: any, isBase: boolean) {
+    let archivo = e.target.files[0];
+    if (!archivo) return;
+    let lector = new FileReader();
+    lector.onload = function(e: any) {
+      let contenido = e.target.result;
+      
+      let tempObj = new Obj3D();
+      if (tempObj.read(contenido)) {
+         if (isBase) {
+             loadedObjects = [tempObj];
+             backups = [];
+             
+             // Setup backup for the single object
+             backups[0] = [];
+             for(let v=1; v<tempObj.w.length; v++) {
+                 if (tempObj.w[v]) backups[0][v] = new Point3D(tempObj.w[v].x, tempObj.w[v].y, tempObj.w[v].z);
+             }
+             
+             let sx = tempObj.xMax - tempObj.xMin;
+             let sy = tempObj.yMax - tempObj.yMin;
+             let sz = tempObj.zMax - tempObj.zMin;
+             baseRho = 0.6 * Math.sqrt(sx*sx + sy*sy + sz*sz);
+             tempObj.rhoMin = baseRho;
+             tempObj.rhoMax = 1000 * tempObj.rhoMin;
+             tempObj.rho = 3.5 * tempObj.rhoMin;
+             visibleLinksCount = 1;
+             
+             const lbl = document.getElementById('file-name-base');
+             if (lbl) lbl.innerText = archivo.name;
+         } else {
+             // Append to assembly
+             let i = loadedObjects.length;
+             loadedObjects.push(tempObj);
+             backups[i] = [];
+             for(let v=1; v<tempObj.w.length; v++) {
+                 if (tempObj.w[v]) backups[i][v] = new Point3D(tempObj.w[v].x, tempObj.w[v].y, tempObj.w[v].z);
+             }
+             tempObj.rhoMin = baseRho;
+             tempObj.rhoMax = 1000 * tempObj.rhoMin;
+             tempObj.rho = 3.5 * tempObj.rhoMin;
+             visibleLinksCount = loadedObjects.length;
+             
+             const lbl = document.getElementById('file-name-movil');
+             if (lbl) lbl.innerText = archivo.name;
+         }
+         
+         vp(0,0,1);
+         repaintAll();
+      }
+    };
+    lector.readAsText(archivo);
+  }
+
+  const fileBase = document.getElementById('file-input-base');
+  fileBase?.addEventListener('change', (e) => leerArchivoGenerico(e, true), false);
+
+  const fileMovil = document.getElementById('file-input-movil');
+  fileMovil?.addEventListener('change', (e) => leerArchivoGenerico(e, false), false);
 });

@@ -68,7 +68,7 @@ export class Obj3D{
          this.indices[j++]=i;
       }
       this.tind=j--;
-      this.shiftToOrigin(); // Origin in center of object.
+      // this.shiftToOrigin(); // Disabled to keep parts in assembly position
       let ch:string;
       let count = 0;
       //debugger
@@ -202,9 +202,10 @@ export class Obj3D{
          }
       }
       let rangeX = xScrMax - xScrMin, rangeY = yScrMax - yScrMin;
-      this.d = this.zoomMultiplier * 0.95 * Math.min(dim.width/rangeX, dim.height/rangeY);
-      this.imgCenter = new Point2D(this.d * (xScrMin + xScrMax)/2,
-                              this.d * (yScrMin + yScrMax)/2);
+      // Fixed scaling factor based on canvas width to prevent auto-scaling each object differently
+      this.d = this.zoomMultiplier * (dim.width / 2.5);
+      // Fixed image center to prevent individual parts from auto-centering
+      this.imgCenter = new Point2D(0, 0);
       for (let i = 1; i < n; i++) {
          if (this.vScr[i] != null) { this.vScr[i].x *= this.d; this.vScr[i].y *= this.d; }
       }
