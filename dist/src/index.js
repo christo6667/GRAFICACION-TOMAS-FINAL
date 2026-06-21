@@ -45,23 +45,17 @@ function toggleAutoRotate() {
 function updateClock() {
     if (loadedObjects.length < 4)
         return;
-    const now = new Date();
-    const ms = now.getMilliseconds();
-    const sec = now.getSeconds() + ms / 1000;
-    const min = now.getMinutes() + sec / 60;
-    const hour = now.getHours() % 12 + min / 60;
     // Obj 1: Hour, Obj 2: Min, Obj 3: Sec
-    // We negate the angle because Math.cos/sin in localRotZ might rotate counter-clockwise by default
-    loadedObjects[1].localRotZ = -hour * (Math.PI * 2 / 12);
-    loadedObjects[2].localRotZ = -min * (Math.PI * 2 / 60);
-    loadedObjects[3].localRotZ = -sec * (Math.PI * 2 / 60);
+    // The mouse angle represents 1 full revolution (12 hours)
+    loadedObjects[1].localRotZ = -mouseTimeAngle;
+    loadedObjects[2].localRotZ = -mouseTimeAngle * 12;
+    loadedObjects[3].localRotZ = -mouseTimeAngle * 12 * 60;
     // Re-project with updated localRotZ
     vp(0, 0, 1);
 }
 function rotateLoop() {
     if (autoRotating) {
-        let dTheta = 45 * 0.0005;
-        vp(dTheta, 0, 1);
+        mouseTimeAngle += 0.01;
     }
     updateClock();
     animationFrameId = requestAnimationFrame(rotateLoop);
@@ -70,6 +64,7 @@ function rotateLoop() {
 let Pix, Piy;
 let Pfx, Pfy;
 let flag = false;
+let mouseTimeAngle = 0;
 function handleMouse(evento) {
     Pix = evento.offsetX;
     Piy = evento.offsetY;
@@ -80,10 +75,12 @@ function makeVizualization(evento) {
         Pfx = evento.offsetX;
         Pfy = evento.offsetY;
         let difX = Pfx - Pix;
-        let difY = Pfy - Piy;
-        vp(-difX * 0.01, difY * 0.01, 1);
+        // Drag horizontal mueve el reloj (la cámara ya no se mueve con el mouse)
+        mouseTimeAngle += difX * 0.005;
+        // Update the clock explicitly so it feels responsive even if auto-rotate is off
+        // Wait, rotateLoop handles the updateClock call continuously, so it's fine.
         Pix = Pfx;
-        Piy = Pfy;
+        Piy = Pfy; // Mantenemos Piy aunque no usemos difY, por si se reintroduce
     }
 }
 function noDraw() {
@@ -105,13 +102,19 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
 let manualRotationInterval;
-function startManualRotation(dTheta, dPhi, fRho = 1) {
+function startManualRotation(dTime, dPhi, fRho = 1) {
     if (loadedObjects.length === 0)
         return;
-    vp(dTheta, dPhi, fRho);
+    if (dTime !== 0)
+        mouseTimeAngle += dTime;
+    if (dPhi !== 0 || fRho !== 1)
+        vp(0, dPhi, fRho);
     clearInterval(manualRotationInterval);
     manualRotationInterval = window.setInterval(() => {
-        vp(dTheta, dPhi, fRho);
+        if (dTime !== 0)
+            mouseTimeAngle += dTime;
+        if (dPhi !== 0 || fRho !== 1)
+            vp(0, dPhi, fRho);
     }, 30);
 }
 function stopManualRotation() {
@@ -122,13 +125,13 @@ function setupDPad() {
     const btnDown = document.getElementById('btn-rot-down');
     const btnLeft = document.getElementById('btn-rot-left');
     const btnRight = document.getElementById('btn-rot-right');
-    const addHoldEvents = (btn, dTheta, dPhi, fRho = 1) => {
+    const addHoldEvents = (btn, dTime, dPhi, fRho = 1) => {
         if (!btn)
             return;
-        btn.addEventListener('mousedown', () => startManualRotation(dTheta, dPhi, fRho));
+        btn.addEventListener('mousedown', () => startManualRotation(dTime, dPhi, fRho));
         btn.addEventListener('mouseup', stopManualRotation);
         btn.addEventListener('mouseleave', stopManualRotation);
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); startManualRotation(dTheta, dPhi, fRho); });
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); startManualRotation(dTime, dPhi, fRho); });
         btn.addEventListener('touchend', (e) => { e.preventDefault(); stopManualRotation(); });
         btn.addEventListener('touchcancel', (e) => { e.preventDefault(); stopManualRotation(); });
     };
@@ -237,6 +240,8 @@ window.addEventListener('load', () => {
         obj.rhoMin = baseRho;
         obj.rhoMax = 1000 * obj.rhoMin;
         obj.rho = 1.0 * obj.rhoMin;
+        obj.phi = 0;
+        obj.theta = -Math.PI / 2;
     }
     vp(0, 0, 1);
     repaintAll();
